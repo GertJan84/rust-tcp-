@@ -5,10 +5,9 @@ use tokio::{
     io::{AsyncReadExt, Interest, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
-use std::collections::HashMap;
 use std::sync::{Arc};
 use tokio::sync::{Mutex, MutexGuard};
-
+#[derive(Debug)]
 enum Protocol {
     Connect,
     Join,
@@ -16,7 +15,7 @@ enum Protocol {
     Dissconnect,
     Users
 }  
-
+#[derive(Debug)]
 struct Client {
     username:String,
     channel: Option<usize>,
@@ -93,7 +92,21 @@ async fn handle_socket(stream: TcpStream, addr: SocketAddr, channels: Arc<Mutex<
 
                         },
                         Protocol::Join => {
-                            println!("{} joined", client.username)
+                            let response = std::str::from_utf8(&buf[..n - 1]).unwrap();
+
+                            for (index, value) in guard.iter().enumerate() {
+                                if value == response {
+                                    client.channel = Some(index);
+                                    break;
+                                }
+                            }
+
+                            if client.channel.is_none()  {
+                                guard.push(response.to_string());
+                                client.channel = Some(guard.len() - 1);
+                            };
+                
+                            println!("{} joined {}", client.username, client.channel.unwrap())
                         },
                         _ => todo!()
                     }
