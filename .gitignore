@@ -4,3 +4,8 @@ build
 target
 data
 __pycache__
+
+
+# Added by cargo
+
+/target
