@@ -32,11 +32,17 @@ async def get_users(channel):
     writer.write(channel.encode())
     await writer.drain()
 
+    await reader.read(1024)
+
     writer.write(b'/users\n')
     await writer.drain()
 
     data = await reader.read(1024)
-    print(data.decode().split("-"))
+    users = [user[2:] for user in data.decode().split('\n')[1:-1]]
+
+    channels[channel[:-1]] = users
+
+    print(channels)
     
 
 
