@@ -4,19 +4,21 @@ import random
 usedNames = []
 channels = {} #hannel_name = [users]
 
-async def connect_to_channel(channel):
+async def get_users(channel):
     reader, writer = await asyncio.open_connection(
         '127.0.0.1', 1234)
 
     # Get welcome
     await reader.read(1024)
 
-    with open('names') as f:
-        names = f.readlines()
-        name = ''
-        while name and name not in usedNames:
-            name = random.choice(names)
-        name += '\n'
+    #with open('names') as f:
+    #    names = f.readlines()
+    #    name = ''
+    #    while name and name not in usedNames:
+    #        name = random.choice(names)
+    #    name += '\n'
+
+    name = 'bot\n'
 
     # send username
     print(f'Connected as: {name!r}')
@@ -29,6 +31,13 @@ async def connect_to_channel(channel):
     channel += '\n'
     writer.write(channel.encode())
     await writer.drain()
+
+    writer.write(b'/users\n')
+    await writer.drain()
+
+    data = await reader.read(1024)
+    print(data.decode().split("-"))
+    
 
 
 async def ask_channels():
@@ -45,6 +54,8 @@ async def ask_channels():
     print(f'Send: {message!r}')
     writer.write(message.encode())
     await writer.drain()
+
+    ######### LOOP
 
     # Get channels
     data = await reader.read(1024)
@@ -65,7 +76,10 @@ async def ask_channels():
             continue
 
         channels[channel] = []
-    print(channels)
+
+        await get_users(channel)
+
+    writer.write(b'/groups\n')
 
 
 asyncio.run(ask_channels())
