@@ -1,12 +1,14 @@
 import asyncio
 import random
-import time
-
-# TODO: Create new function that sends channels to scout tcp channel/group
-# HACK: Use regex instad of string manipulation
+import re
 
 usedNames = set() 
 channels = {} 
+
+getUsername = re.compile(r"(?<=\*\*).*(?= joined| left)")
+groupReg = re.compile(r"(?<=\- ).*(?= \|)")
+userReg = re.compile(r"(?<=\- ).*(?=\n)")
+
 
 async def get_users(channel):
     reader, writer = await asyncio.open_connection(
@@ -18,7 +20,7 @@ async def get_users(channel):
     with open('names') as f:
         names = f.readlines()
         names = [name.strip() for name in names]
-        availableNames = [name for name in names if name not in usedNames]
+        availableNames = [name + " (bot)" for name in names if name + " (bot)" not in usedNames]
 
         if availableNames:
             name = random.choice(availableNames)
@@ -36,20 +38,43 @@ async def get_users(channel):
             writer.write(channel.encode())
             await writer.drain()
 
-            await reader.read(1024)
+            
+            while True:
+                past_messages = await reader.read(1024)
 
-            writer.write(b'/users\n')
-            await writer.drain()
+                userName = getUsername.search(past_messages.decode())
+                name = name[:-1]
 
-            data = await reader.read(1024)
-            users = [user[2:] for user in data.decode().split('\n')[1:-1]]
-            channels[channel[:-1]] = users
+                if not userName:
+                    continue
 
-            writer.write(b'/exit\n')
-            await writer.drain()
+                userName = userName.group()
 
-            writer.write(b'\n')
-            await writer.drain()
+                if userName == name:
+
+                    writer.write(b'/users\n')
+                    await writer.drain()
+
+                    data = await reader.read(1024)
+                    users = userReg.findall(data.decode())
+                    if name in users:
+                       users.remove(name)
+                    channels[channel[:-1]] = users
+                else:
+                    if userName in channels[channel[:-1]]:
+                        print(f"{userName} left")
+                        channels[channel[:-1]].remove(userName)
+                    else:
+                        print(f"{userName} joined")
+                        channels[channel[:-1]].append(userName)
+
+                if len(channels[channel[:-1]]) == 0:
+                    writer.write(b'/exit\n')
+                    await writer.drain()
+                    
+
+                await asyncio.sleep(3)
+
 
 
 async def ask_channels():
@@ -66,46 +91,58 @@ async def ask_channels():
 
     await reader.read(1024)
 
-    while True:
-        writer.write(b'/groups\n')
-        await writer.drain()
 
-        data = await reader.read(1024)
-        res_channels = [channel.split(" ")[1] for channel in data.decode().split("\n")[1:-1]] # get groups
+    async with asyncio.TaskGroup() as tg:
 
-        for channel in res_channels:
-            if channel == 'None':
-                continue
+        while True:
+            writer.write(b'/groups\n')
+            await writer.drain()
 
-            channel = channel.split(" |")[0]
+            data = await reader.read(1024)
+            res_channels = groupReg.findall(data.decode())
 
-            channels[channel] = []
-            await get_users(channel)
+            for channel in res_channels:
+                if channel == 'None':
+                    continue
 
-        time.sleep(3)
+                channel = channel.split(" |")[0]
 
-        print(channels)
-        
-        # TODO: Fix this
-        # writer.write(b'scout\n')
-        # await writer.drain()
+                if channel == "scout":
+                    continue
 
-        # await reader.read(1024)
 
-        # for group, users in channels.items():
+                if channel in set(channels.keys()):
+                    if not len(channels[channel]):
+                        del(channels[channel])
+                    continue
 
-            # channel_announce = f'**** {group} ****\n'
+                channels[channel] = []
+
+                tg.create_task(get_users(channel))
+
+            # Print to scout
+            print(channels)
             
-            # writer.write(channel_announce.encode())
-            # await writer.drain()
+            writer.write(b'scout\n')
+            await writer.drain()
 
-            # for user in users:
-                # user += '\n'
-                # writer.write(user.encode())
-                # await writer.drain()
+            await reader.read(1024)
 
+            for group, users in channels.items():
 
-        # writer.write(b'/disconnect\n')
-        # await writer.drain()
+                channel_announce = f'**** {group} ****\n'
+                
+                writer.write(channel_announce.encode())
+                await writer.drain()
+
+                for user in users:
+                    user += '\n'
+                    writer.write(user.encode())
+                    await writer.drain()
+
+            writer.write(b'/leave\n')
+            await writer.drain()
+
+            await asyncio.sleep(3)
 
 asyncio.run(ask_channels())

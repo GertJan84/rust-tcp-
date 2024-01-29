@@ -16,19 +16,17 @@ async fn show_channels(
         .send_message(&mut writer, "Channels | user_amount:".to_string(), true)
     .await;
     let guard: MutexGuard<'_, Vec<Channel>> = channels.lock().await;
-    if guard.len() == 0 {
-        client
-            .send_message(&mut writer, "- None".to_string(), true)
-        .await;
-    }
+    
     for channel in guard.iter() {
-        client
-            .send_message(
-                &mut writer,
-                format!("- {} | {}", channel.name, channel.users.len()),
-                true,
-            )
-        .await;
+        if channel.visible {
+            client
+                .send_message(
+                    &mut writer,
+                    format!("- {} | {}", channel.name, channel.users.len()),
+                    true,
+                )
+            .await;
+        }
     }
     drop(guard);
 
@@ -203,14 +201,18 @@ async fn main() -> io::Result<()> {
                                                 client.send_message(&mut writer, "Invalid command! (Possible: 'Exit', 'Disconnect', 'Users')".to_string(), true).await;
 
                                             },
-                                            Commands::Disconnect => {
+                                            Commands::Leave => {
                                                 let mut guard = channels.lock().await;
                                                 let channel = guard.get_mut(client.channel_index.unwrap()).unwrap();
                                                 let index = channel.users.iter().position(|c| c.username == client.username).unwrap();
                                                 channel.users.remove(index);
+                                                if channel.users.len() == 0 {
+                                                    channel.visible = false;
+                                                } else {
+                                                    tx.send((format!("**{} left channel!**\n", client.username), addr, client.channel_index)).unwrap();
+                                                    client.send_message(&mut writer, "Leaving...".to_string(), true).await;
+                                                }
                                                 drop(guard);
-                                                tx.send((format!("**{} left channel!**\n", client.username), addr, client.channel_index)).unwrap();
-                                                client.send_message(&mut writer, "Disconnecting...".to_string(), true).await;
                                                 client.protocol = Protocol::Join;
                                             }
                                             Commands::Exit => {
@@ -218,9 +220,12 @@ async fn main() -> io::Result<()> {
                                                 let channel = guard.get_mut(client.channel_index.unwrap()).unwrap();
                                                 let index = channel.users.iter().position(|c| c.username == client.username).unwrap();
                                                 channel.users.remove(index);
-                                                tx.send((format!("**{} left channel!**\n", client.username), addr, client.channel_index)).unwrap();
-                                                client.send_message(&mut writer, "Exiting...".to_string(), true).await;
-                                                println!("{} left channel {}", client.username, channel.name);
+                                                if channel.users.len() == 0 {
+                                                    channel.visible = false;
+                                                } else {
+                                                    tx.send((format!("**{} left channel!**\n", client.username), addr, client.channel_index)).unwrap();
+                                                    client.send_message(&mut writer, "Exiting...".to_string(), true).await;
+                                                }
                                             },
                                             Commands::Users => {
                                                 client.send_message(&mut writer, "Users:".to_string(), true).await;

@@ -10,7 +10,7 @@ pub enum Protocol {
 
 pub enum Commands {
     Invalid,
-    Disconnect,
+    Leave,
     Users,
     Group,
     Exit,
@@ -23,7 +23,7 @@ impl Commands {
         }
         match command.to_lowercase().as_str() {
             "/exit" | "/quit" => Commands::Exit,
-            "/disconnect" => Commands::Disconnect,
+            "/leave" => Commands::Leave,
             "/users" => Commands::Users,
             "/groups" => Commands::Group,
             _ => Commands::Invalid,
@@ -112,6 +112,7 @@ impl Display for Client {
 pub struct Channel {
     pub name: String,
     pub users: Vec<Client>,
+    pub visible: bool,
 }
 
 impl Channel {
@@ -119,6 +120,7 @@ impl Channel {
         Channel {
             name,
             users: Vec::new(),
+            visible: true,
         }
     }
 }
